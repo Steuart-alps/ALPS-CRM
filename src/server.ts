@@ -1,12 +1,18 @@
 import { migrate } from "./migrate.ts";
 import { createApp, seedTemplates } from "./app.ts";
 import { geocodeMissing, syncAllVisits } from "./visits.ts";
+import { recordCompletion } from "./routes/gaps.ts";
 
 async function housekeeping(): Promise<void> {
   try {
     await syncAllVisits();
   } catch (err) {
     console.error("visit sync failed", err);
+  }
+  try {
+    await recordCompletion();
+  } catch (err) {
+    console.error("completion record failed", err);
   }
   try {
     await geocodeMissing();

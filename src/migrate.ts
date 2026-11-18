@@ -288,6 +288,20 @@ const migrations: { id: string; sql: string }[] = [
       create index doc_files_request_idx on doc_files (request_id);
     `,
   },
+  {
+    // Daily record of how complete the client records are, so progress on
+    // "Missing details" can be seen over time.
+    id: "002_completion_daily",
+    sql: `
+      create table completion_daily (
+        day date primary key,
+        clients integer not null,
+        clients_with_gaps integer not null,
+        filled integer not null,
+        possible integer not null
+      );
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {
