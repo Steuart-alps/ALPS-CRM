@@ -58,7 +58,7 @@ export function settingsRouter(): Router {
 
 <section class="card">
   <h2>Assessors</h2>
-  <p class="small muted">The people who do visits. Their email gets the calendar invites; the home postcode is where the visit planner starts each route.</p>
+  <p class="small muted">The people who do visits. Their email gets the calendar invites; the home postcode is where the visit planner starts each route. Anyone with a linked login can also set their own home postcode under their name at the top right (My details).</p>
   <ul class="list">${as.map((a) => html`<li>
     <form method="post" action="/settings/assessors/${a.id}" class="stack">
       <div class="row">
