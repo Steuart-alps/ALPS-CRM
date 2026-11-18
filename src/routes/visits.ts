@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { one, query } from "../db.ts";
 import { html, ukDate, todayUk, MONTHS, opt, checked, type SafeHtml } from "../html.ts";
-import { s, int, dateOrNull, idParam, page, NotFound } from "../util.ts";
+import { s, int, dateOrNull, idParam, page, back, NotFound } from "../util.ts";
 import { setFlash } from "../auth.ts";
 import { assessors, VISIT_STATUS_LABEL } from "../lookups.ts";
 import { miles, orderStops, splitTrips, postcodeArea, roughDriveText, googleRouteUrl, appleRouteUrl, type Point } from "../geo.ts";
@@ -197,6 +197,22 @@ ${sections}`, "visits");
     const v = await one<VisitRow>(`${VISIT_SELECT} where v.id = $1`, [idParam(req)]);
     if (!v) throw new NotFound();
     page(req, res, `Visit: ${v.client_name}`, await visitPage(v, []), "visits");
+  });
+
+  // One-click "Done" from Today or the visit page, for the consultant or anyone in the office.
+  r.post("/visits/:id/tick", async (req, res) => {
+    const v = await one<VisitRow>(`${VISIT_SELECT} where v.id = $1`, [idParam(req)]);
+    if (!v) throw new NotFound();
+    if (v.status === "booked") {
+      const dates = v.booked_on ? visitDates(v.booked_on, v.days, v.visit_weekdays) : [];
+      const last = dates[dates.length - 1] ?? todayUk();
+      await query("update visits set status = 'done', done_on = $2, updated_at = now() where id = $1", [v.id, last < todayUk() ? last : todayUk()]);
+      await query("insert into activities (client_id, user_id, kind, body) values ($1, $2, 'visit', $3)", [
+        v.client_id, req.user!.id, `Visit ${v.seq} (${MONTHS[v.month - 1]} ${v.year}) ticked done by ${req.user!.name}.`,
+      ]);
+      setFlash(req, `${v.client_name} ticked off as done.`);
+    }
+    res.redirect(back(req, `/visits/${v.id}`));
   });
 
   r.post("/visits/:id", async (req, res) => {

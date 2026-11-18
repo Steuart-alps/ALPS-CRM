@@ -208,3 +208,27 @@ test("database completion shows progress and can be set as a task for the office
   const day = await db.one("select clients, possible from completion_daily order by day desc limit 1");
   assert.ok(day.clients >= 1 && day.possible > day.clients && day.possible % day.clients === 0);
 });
+
+test("finished visits are ticked off, with a reminder while outstanding", { skip }, async () => {
+  const owner = new Browser();
+  await owner.signIn("owner@example.test", "owner-password-long");
+  const c = await db.one("select id from clients where name = 'Lochside Hotel'");
+  const elinor = await db.one("select id from assessors where name = 'Elinor'");
+  const v = await db.one(
+    "insert into visits (client_id, year, month, seq, days, assessor_id, status, booked_on) values ($1, 2020, 3, 9, 2, $2, 'booked', '2020-03-02') returning id",
+    [c.id, elinor.id],
+  );
+  assert.match((await owner.req("/")).text, /Finished visits not ticked off/);
+  const { sendDoneReminders } = await import("../src/reminders.ts");
+  const { sentMail } = await import("../src/email.ts");
+  const before = sentMail().length;
+  assert.equal(await sendDoneReminders({ force: true }), 1);
+  const mail = sentMail().at(-1)!;
+  assert.equal(mail.to, "elinor@example.test");
+  assert.match(mail.text, new RegExp(`/visits/${v.id}`));
+  assert.equal(await sendDoneReminders({ force: true }), 0, "not again the same day");
+  assert.equal(sentMail().length, before + 1);
+  await owner.req(`/visits/${v.id}/tick`, { form: {} });
+  const done = await db.one("select status, done_on from visits where id = $1", [v.id]);
+  assert.deepEqual(done, { status: "done", done_on: "2020-03-03" });
+});

@@ -302,6 +302,11 @@ const migrations: { id: string; sql: string }[] = [
       );
     `,
   },
+  {
+    // When the consultant was last reminded to tick off a finished visit.
+    id: "003_visit_done_reminders",
+    sql: `alter table visits add column done_reminded_on date;`,
+  },
 ];
 
 export async function migrate(): Promise<void> {
