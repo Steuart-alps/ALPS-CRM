@@ -25,6 +25,7 @@ main { max-width: 1150px; margin: 0 auto; padding: 1.25rem 16px 3rem; }
 .top nav a[aria-current] { opacity: 1; border-bottom-color: #fff; }
 .top .who { display: flex; gap: .6rem; align-items: center; margin: 0; font-size: .9rem; }
 .top .who button { color: #fff; }
+.top .who a { color: #fff; }
 .flash { background: #e8f4ec; border: 1px solid #b9dcc5; color: #164d2a; padding: .6rem .8rem; border-radius: 6px; }
 .error { background: #fbeceb; border: 1px solid #f0c4c1; color: #7a1a14; padding: .6rem .8rem; border-radius: 6px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }

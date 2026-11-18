@@ -102,3 +102,16 @@ test("html escapes values and money formats", () => {
   assert.equal(parseMoney("£1,200"), 120000);
   assert.equal(parseMoney(""), null);
 });
+
+test("drive-time heads-up and map links", async () => {
+  const { roughDriveText, googleRouteUrl, appleRouteUrl } = await import("../src/geo.ts");
+  assert.equal(roughDriveText(1), "under 5 minutes");
+  assert.equal(roughDriveText(20), "40 min");
+  assert.equal(roughDriveText(60), "1 hr 55 min");
+  assert.equal(googleRouteUrl(["IV2 6DH"]), null);
+  const g = new URL(googleRouteUrl(["IV2 6DH", "IV3 8NG", "PH1 1AA", "IV2 6DH"])!);
+  assert.equal(g.hostname, "www.google.com");
+  assert.equal(g.searchParams.get("origin"), "IV2 6DH, UK");
+  assert.equal(g.searchParams.get("waypoints"), "IV3 8NG, UK|PH1 1AA, UK");
+  assert.equal(new URL(appleRouteUrl("IV2 6DH", "PH1 1AA")).searchParams.get("daddr"), "PH1 1AA, UK");
+});

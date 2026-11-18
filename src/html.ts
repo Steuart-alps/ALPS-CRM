@@ -123,7 +123,7 @@ ${user
     ${user.role === "owner" ? link("/income", "Income", "income") : ""}
     ${user.role === "owner" ? link("/settings", "Settings", "settings") : ""}
   </nav>
-  <form method="post" action="/logout" class="who"><span>${user.name}</span><button class="link">Sign out</button></form>
+  <form method="post" action="/logout" class="who"><a href="/me" title="My details">${user.name}</a><button class="link">Sign out</button></form>
 </header>`
   : ""}
 <main>

@@ -17,6 +17,7 @@ import { overviewRouter } from "./routes/overview.ts";
 import { settingsRouter } from "./routes/settings.ts";
 import { exportsRouter } from "./routes/exports.ts";
 import { gapsRouter } from "./routes/gaps.ts";
+import { meRouter } from "./routes/me.ts";
 import { respondRouter } from "./invites.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -106,6 +107,7 @@ export function createApp(): express.Express {
   app.use(documentsRouter());
   app.use(settingsRouter());
   app.use(gapsRouter());
+  app.use(meRouter());
 
   app.use((req, res) => {
     res.status(404).send(layout({ title: "Not found", user: req.user, body: html`<h1>That page doesn't exist</h1><p><a href="/">Back to Today</a></p>` }));

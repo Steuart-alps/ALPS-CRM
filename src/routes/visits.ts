@@ -4,7 +4,7 @@ import { html, ukDate, todayUk, MONTHS, opt, checked, type SafeHtml } from "../h
 import { s, int, dateOrNull, idParam, page, NotFound } from "../util.ts";
 import { setFlash } from "../auth.ts";
 import { assessors, VISIT_STATUS_LABEL } from "../lookups.ts";
-import { miles, orderStops, splitTrips, postcodeArea, type Point } from "../geo.ts";
+import { miles, orderStops, splitTrips, postcodeArea, roughDriveText, googleRouteUrl, appleRouteUrl, type Point } from "../geo.ts";
 import { WEEKDAYS, weekdaysText, VISIT_TYPES } from "./clients.ts";
 import { sendVisitInvites } from "../invites.ts";
 
@@ -114,6 +114,15 @@ function visitLine(v: VisitRow, extra?: SafeHtml): SafeHtml {
   </li>`;
 }
 
+/** "23 miles from home, roughly 45 min" with Google and Apple Maps links, for a heads-up on travel. */
+function driveLeg(from: { point: Point | null; postcode: string | null; label: string }, to: { point: Point | null; postcode: string | null }): SafeHtml {
+  if (!from.point || !to.point || !from.postcode || !to.postcode) return html``;
+  const d = miles(from.point, to.point);
+  return html`<br><span class="small muted">${Math.round(d) === 1 ? "1 mile" : `${Math.round(d)} miles`} ${from.label}, roughly ${roughDriveText(d)} ·
+    <a href="${googleRouteUrl([from.postcode, to.postcode])}" target="_blank" rel="noopener">Google Maps</a> ·
+    <a href="${appleRouteUrl(from.postcode, to.postcode)}" target="_blank" rel="noopener">Apple Maps</a></span>`;
+}
+
 export function visitsRouter(): Router {
   const r = Router();
 
@@ -152,8 +161,16 @@ export function visitsRouter(): Router {
     for (let k = 1; k < pts.length; k++) span += miles(pts[k - 1], pts[k]);
     const areas = [...new Set(trip.map((t) => postcodeArea(t.v.postcode)))].join(", ");
     const fromHome = home && pts[0] ? Math.round(miles(home, pts[0])) : null;
-    return html`<h3 class="small" style="margin:.75rem 0 .25rem">Trip ${i + 1}: ${areas} area · ${trip.length} client${trip.length === 1 ? "" : "s"}${pts.length > 1 ? ` · about ${Math.round(span)} miles between them` : ""}${fromHome !== null ? ` · ${fromHome} miles from home` : ""}${pts.length === 0 ? " · no postcode location yet" : ""}</h3>
-    <ol class="list">${trip.map((t) => visitLine(t.v))}</ol>`;
+    const homePc = a.home_postcode ?? null;
+    const tripUrl = homePc && trip.some((t) => t.v.postcode) ? googleRouteUrl([homePc, ...trip.map((t) => t.v.postcode ?? "").filter(Boolean), homePc]) : null;
+    const legs = trip.map((t, k) => {
+      const prev = trip.slice(0, k).reverse().find((x) => x.point && x.v.postcode);
+      return prev
+        ? driveLeg({ point: prev.point, postcode: prev.v.postcode, label: `from ${prev.v.client_name}` }, { point: t.point, postcode: t.v.postcode })
+        : driveLeg({ point: home, postcode: homePc, label: "from home" }, { point: t.point, postcode: t.v.postcode });
+    });
+    return html`<h3 class="small" style="margin:.75rem 0 .25rem">Trip ${i + 1}: ${areas} area · ${trip.length} client${trip.length === 1 ? "" : "s"}${pts.length > 1 ? ` · about ${Math.round(span)} miles between them` : ""}${fromHome !== null ? ` · ${fromHome} miles from home` : ""}${pts.length === 0 ? " · no postcode location yet" : ""}${tripUrl ? html` · <a href="${tripUrl}" target="_blank" rel="noopener">Whole trip in Google Maps</a>` : ""}</h3>
+    <ol class="list">${trip.map((t, k) => visitLine(t.v, legs[k]))}</ol>`;
   })}
   ${open.length === 0 ? html`<p class="muted">Nothing due this month.</p>` : ""}
   ${done.length ? html`<details><summary class="small">Done (${done.length})</summary><ul class="list">${done.map((v) => visitLine(v))}</ul></details>` : ""}
@@ -344,10 +361,15 @@ async function visitPage(v: VisitRow, warnings: string[], sendInvites = true): P
     ? nearby.map((n) => ({ n, d: miles(here, { lat: n.lat!, lng: n.lng! }) })).filter((x) => x.d <= 25).sort((a, b) => a.d - b.d).slice(0, 8)
     : [];
   const dates = v.booked_on ? visitDates(v.booked_on, v.days, v.visit_weekdays) : [];
+  const who = as.find((a) => a.id === v.assessor_id);
+  const drive = who ? driveLeg(
+    { point: who.home_lat !== null && who.home_lng !== null ? { lat: who.home_lat, lng: who.home_lng } : null, postcode: who.home_postcode, label: `from ${who.name}'s home` },
+    { point: here, postcode: v.postcode },
+  ) : html``;
   return html`
 <div class="spread"><div>
   <h1><a href="/clients/${v.client_id}">${v.client_name}</a></h1>
-  <div class="muted">${v.visit_type ? html`<span class="chip">${VISIT_TYPES[v.visit_type]}</span> ` : ""}Visit ${v.seq}, due ${MONTHS[v.month - 1]} ${v.year} · ${v.days} day${v.days > 1 ? "s" : ""} · ${weekdaysText(v.visit_weekdays)}</div>
+  <div class="muted">${v.visit_type ? html`<span class="chip">${VISIT_TYPES[v.visit_type]}</span> ` : ""}Visit ${v.seq}, due ${MONTHS[v.month - 1]} ${v.year} · ${v.days} day${v.days > 1 ? "s" : ""} · ${weekdaysText(v.visit_weekdays)}${drive}</div>
 </div><a href="/visits?year=${v.year}&month=${v.month}">Back to planner</a></div>
 ${warnings.length ? html`<div class="error"><strong>Check before booking:</strong><ul>${warnings.map((w) => html`<li>${w}</li>`)}</ul></div>` : ""}
 <div class="grid">

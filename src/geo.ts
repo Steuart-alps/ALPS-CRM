@@ -135,3 +135,35 @@ export function splitTrips<T extends { point: Point | null }>(ordered: T[], gapM
   if (current.length) trips.push(current);
   return trips;
 }
+
+// Drive-time heads-up. Straight-line miles are turned into a rough road
+// estimate (roads are about a third longer, at about 40 mph on average).
+// The map links open Google or Apple Maps for real times and traffic; they
+// are free and only the postcodes go in the link.
+const ROAD_FACTOR = 1.3;
+const AVERAGE_MPH = 40;
+
+export function roughDriveText(straightMiles: number): string {
+  const mins = Math.round(((straightMiles * ROAD_FACTOR) / AVERAGE_MPH) * 60 / 5) * 5;
+  if (mins < 5) return "under 5 minutes";
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h} hr${m ? ` ${m} min` : ""}` : `${m} min`;
+}
+
+const place = (pc: string) => `${pc}, UK`;
+
+/** Google Maps directions through the postcodes in order (up to 9 stops between start and end). */
+export function googleRouteUrl(postcodes: string[]): string | null {
+  const pcs = postcodes.filter(Boolean);
+  if (pcs.length < 2) return null;
+  const middle = pcs.slice(1, -1).slice(0, 9);
+  const q = new URLSearchParams({ api: "1", origin: place(pcs[0]), destination: place(pcs[pcs.length - 1]), travelmode: "driving" });
+  if (middle.length) q.set("waypoints", middle.map(place).join("|"));
+  return `https://www.google.com/maps/dir/?${q.toString()}`;
+}
+
+/** Apple Maps driving directions from one postcode to another. */
+export function appleRouteUrl(from: string, to: string): string {
+  return `https://maps.apple.com/?${new URLSearchParams({ saddr: place(from), daddr: place(to), dirflg: "d" }).toString()}`;
+}

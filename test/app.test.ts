@@ -180,3 +180,16 @@ test("document requests fill the master format with the client's details", { ski
   assert.ok(xml.includes("Lochside Ltd t/a Lochside Hotel"));
   assert.ok(!xml.includes("Royal Ashdown"));
 });
+
+test("someone who does visits sets their own home postcode, and only their own", { skip }, async () => {
+  const pa = new Browser();
+  await pa.signIn("pa@example.test", "owner-password-long");
+  const u = await db.one("select id from users where email = 'pa@example.test'");
+  const mine = await db.one("insert into assessors (name, user_id) values ('Ayesha', $1) returning id", [u.id]);
+  const elinor = await db.one("select id, home_postcode from assessors where name = 'Elinor'");
+  assert.match((await pa.req("/me")).text, /Home postcode/);
+  await pa.req("/me/home", { form: { assessor_id: String(mine.id), home_postcode: "ph1 1aa" } });
+  await pa.req("/me/home", { form: { assessor_id: String(elinor.id), home_postcode: "IV2 6DH" } });
+  assert.equal((await db.one("select home_postcode from assessors where id = $1", [mine.id])).home_postcode, "PH1 1AA");
+  assert.equal((await db.one("select home_postcode from assessors where id = $1", [elinor.id])).home_postcode, elinor.home_postcode);
+});
