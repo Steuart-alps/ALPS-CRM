@@ -232,3 +232,20 @@ test("finished visits are ticked off, with a reminder while outstanding", { skip
   const done = await db.one("select status, done_on from visits where id = $1", [v.id]);
   assert.deepEqual(done, { status: "done", done_on: "2020-03-03" });
 });
+
+test("ticking a visit done goes straight to booking the next one, with its type confirmed", { skip }, async () => {
+  const owner = new Browser();
+  await owner.signIn("owner@example.test", "owner-password-long");
+  const c = await db.one("insert into clients (name, status) values ('Glen Hotel', 'client') returning id");
+  const done = await db.one("insert into visits (client_id, year, month, seq, days, status, booked_on, visit_type) values ($1, 2021, 3, 1, 1, 'booked', '2021-03-02', 'fire') returning id", [c.id]);
+  const next = await db.one("insert into visits (client_id, year, month, seq, days, status, visit_type) values ($1, 2030, 9, 2, 1, 'to_book', 'food') returning id", [c.id]);
+  const r = await owner.req(`/visits/${done.id}/tick`, { form: {} });
+  assert.equal(r.location, `/visits/${next.id}?next=1`);
+  const pageText = (await owner.req(r.location!)).text;
+  assert.match(pageText, /Book the next visit before you leave: Food, due September 2030/);
+  const noType = await owner.req(`/visits/${next.id}`, { form: { action: "book", visit_type: "", assessor_id: "", booked_on: "2030-09-10", booked_time: "10:00", notes: "", confirm: "1" } });
+  assert.match(noType.text, /Choose what this visit is for/);
+  assert.equal((await db.one("select status from visits where id = $1", [next.id])).status, "to_book");
+  await owner.req(`/visits/${next.id}`, { form: { action: "book", visit_type: "other", assessor_id: "", booked_on: "2030-09-10", booked_time: "10:00", notes: "", confirm: "1" } });
+  assert.deepEqual(await db.one("select status, visit_type from visits where id = $1", [next.id]), { status: "booked", visit_type: "other" });
+});

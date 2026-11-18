@@ -307,6 +307,14 @@ const migrations: { id: string; sql: string }[] = [
     id: "003_visit_done_reminders",
     sql: `alter table visits add column done_reminded_on date;`,
   },
+  {
+    // Steuart, 18 Nov 2026: a visit can be for food, fire, general, compliance or other.
+    id: "004_visit_type_other",
+    sql: `
+      alter table visits drop constraint if exists visits_visit_type_check;
+      alter table visits add constraint visits_visit_type_check check (visit_type in ('fire', 'food', 'general', 'compliance', 'other'));
+    `,
+  },
 ];
 
 export async function migrate(): Promise<void> {

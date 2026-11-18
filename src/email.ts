@@ -16,7 +16,8 @@ export function sentMail(): Mail[] {
 
 export async function sendMail(mail: Mail): Promise<boolean> {
   const key = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
+  // RESEND_FROM_EMAIL is ComplyTrack's name for the same setting, so both work.
+  const from = process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL;
   if (!key || !from) {
     sent.push(mail);
     console.log(`email (not sent, email not set up): to=${mail.to} subject=${JSON.stringify(mail.subject)}`);
