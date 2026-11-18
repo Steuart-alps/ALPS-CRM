@@ -193,3 +193,18 @@ test("someone who does visits sets their own home postcode, and only their own",
   assert.equal((await db.one("select home_postcode from assessors where id = $1", [mine.id])).home_postcode, "PH1 1AA");
   assert.equal((await db.one("select home_postcode from assessors where id = $1", [elinor.id])).home_postcode, elinor.home_postcode);
 });
+
+test("database completion shows progress and can be set as a task for the office", { skip }, async () => {
+  const owner = new Browser();
+  await owner.signIn("owner@example.test", "owner-password-long");
+  const gaps = await owner.req("/gaps");
+  assert.match(gaps.text, /Client database \d+% complete/);
+  const pa = await db.one("select id from users where email = 'pa@example.test'");
+  await owner.req("/gaps/task", { form: { assigned_to: String(pa.id), due_on: "" } });
+  await owner.req("/gaps/task", { form: { assigned_to: String(pa.id), due_on: "" } });
+  const tasks = await db.query("select assigned_to from tasks where title = 'Complete the client database' and status = 'open'");
+  assert.deepEqual(tasks.map((t) => t.assigned_to), [pa.id]);
+  assert.match((await owner.req("/gaps")).text, /Ayesha has this as a task/);
+  const day = await db.one("select clients, possible from completion_daily order by day desc limit 1");
+  assert.ok(day.clients >= 1 && day.possible > day.clients && day.possible % day.clients === 0);
+});

@@ -73,3 +73,5 @@ details summary { cursor: pointer; font-weight: 600; }
   .top nav { order: 3; flex-basis: 100%; }
   th, td { padding: .4rem; }
 }
+.bar { height: .5rem; background: var(--chip); border-radius: 1rem; overflow: hidden; margin: .4rem 0; }
+.bar span { display: block; height: 100%; background: var(--good); border-radius: 1rem; }

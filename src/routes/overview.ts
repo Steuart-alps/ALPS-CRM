@@ -6,7 +6,7 @@ import { s, idParam, page, NotFound } from "../util.ts";
 import { requireOwner, setFlash } from "../auth.ts";
 import { visitDates, dateRangeText } from "./visits.ts";
 import { statusChip, monthsText } from "./clients.ts";
-import { gapCount } from "./gaps.ts";
+import { completion, progressBar } from "./gaps.ts";
 
 export function overviewRouter(): Router {
   const r = Router();
@@ -31,7 +31,7 @@ export function overviewRouter(): Router {
               where v.status = 'booked' and v.booked_on between $1::date and $1::date + 14 order by v.booked_on`, [today]),
       query(`select ch.*, c.name as client_name from chasers ch join clients c on c.id = ch.client_id
               where ch.received_on is null and ch.chase_again_on <= $1 order by ch.chase_again_on limit 20`, [today]),
-      gapCount(),
+      completion(),
       query(`select v.id, c.name as client_name, v.booked_on, v.client_response, v.assessor_response from visits v join clients c on c.id = v.client_id
               where v.status = 'booked' and v.invited_at is not null and v.booked_on >= $1::date
                 and (v.client_response = 'change' or v.assessor_response = 'change'
@@ -56,7 +56,8 @@ export function overviewRouter(): Router {
     <div class="muted small">Documents for me to create</div><div class="stat">${docs.length}</div>
   </a>
   <a class="card" href="/gaps" style="text-decoration:none;color:inherit">
-    <div class="muted small">Clients with missing details</div><div class="stat">${gaps}</div>
+    <div class="muted small">Client database</div><div class="stat">${gaps.pct}% complete</div>
+    ${progressBar(gaps.pct)}<div class="small">${gaps.clientsWithGaps} client${gaps.clientsWithGaps === 1 ? "" : "s"} with missing details</div>
   </a>
   ${isOwner ? html`<a class="card" href="/documents?view=checking" style="text-decoration:none;color:inherit">
     <div class="muted small">Waiting for you to check</div><div class="stat">${checking.length + quotes.length}</div>
