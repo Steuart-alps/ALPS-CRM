@@ -88,8 +88,8 @@ There is no build step: Node runs the TypeScript directly.
    come in as former clients. The "Date" column is read as the contract start.
 4. In Settings add Ayesha (tick "Office person") and anyone else, the
    assessors' emails and home postcodes, and the price list.
-5. For email, set `RESEND_API_KEY`, `EMAIL_FROM` and `EMAIL_REPLY_TO` on the
-   Environment page (the ComplyTrack Resend account can send from the same
+5. For email, set `RESEND_API_KEY`, `EMAIL_FROM` (or ComplyTrack's name for
+   it, `RESEND_FROM_EMAIL`) and `EMAIL_REPLY_TO` on the Environment page (the ComplyTrack Resend account can send from the same
    domain). Until then nothing is emailed, and each screen says so.
 6. Optional: a web address such as `crm.alpsconsultancy.co.uk` (Settings >
    Custom Domains on Render, plus a CNAME at one.com), then set

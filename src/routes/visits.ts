@@ -7,6 +7,7 @@ import { assessors, VISIT_STATUS_LABEL } from "../lookups.ts";
 import { miles, orderStops, splitTrips, postcodeArea, roughDriveText, googleRouteUrl, appleRouteUrl, type Point } from "../geo.ts";
 import { WEEKDAYS, weekdaysText, VISIT_TYPES } from "./clients.ts";
 import { sendVisitInvites } from "../invites.ts";
+import { syncClientVisits } from "../visits.ts";
 
 /** ISO weekday 1 (Mon) to 7 (Sun) of a YYYY-MM-DD date. */
 export function isoWeekday(date: string): number {
@@ -123,6 +124,16 @@ function driveLeg(from: { point: Point | null; postcode: string | null; label: s
     <a href="${appleRouteUrl(from.postcode, to.postcode)}" target="_blank" rel="noopener">Apple Maps</a></span>`;
 }
 
+/** The client's next visit still to book, so it can be booked before the consultant leaves. */
+async function nextToBook(clientId: number, notId: number, year: number): Promise<{ id: number } | undefined> {
+  const find = () => one<{ id: number }>(
+    "select id from visits where client_id = $1 and id <> $2 and status = 'to_book' order by year * 12 + month, seq limit 1",
+    [clientId, notId],
+  );
+  // The following year's visits may not be made yet (they are made a year ahead).
+  return (await find()) ?? (await syncClientVisits(clientId, [year + 1]), await find());
+}
+
 export function visitsRouter(): Router {
   const r = Router();
 
@@ -196,7 +207,7 @@ ${sections}`, "visits");
   r.get("/visits/:id", async (req, res) => {
     const v = await one<VisitRow>(`${VISIT_SELECT} where v.id = $1`, [idParam(req)]);
     if (!v) throw new NotFound();
-    page(req, res, `Visit: ${v.client_name}`, await visitPage(v, []), "visits");
+    page(req, res, `Visit: ${v.client_name}`, await visitPage(v, [], true, req.query.next === "1"), "visits");
   });
 
   // One-click "Done" from Today or the visit page, for the consultant or anyone in the office.
@@ -211,6 +222,9 @@ ${sections}`, "visits");
         v.client_id, req.user!.id, `Visit ${v.seq} (${MONTHS[v.month - 1]} ${v.year}) ticked done by ${req.user!.name}.`,
       ]);
       setFlash(req, `${v.client_name} ticked off as done.`);
+      // Steuart, 18 Nov 2026: book the next visit at the close of this one.
+      const next = await nextToBook(v.client_id, v.id, v.year);
+      if (next) return res.redirect(`/visits/${next.id}?next=1`);
     }
     res.redirect(back(req, `/visits/${v.id}`));
   });
@@ -223,6 +237,9 @@ ${sections}`, "visits");
     const bookedOn = dateOrNull(req.body.booked_on);
     const time = s(req.body.booked_time);
     const notes = s(req.body.notes);
+    // The form always sends a type; buttons without the form (e.g. resend) keep the current one.
+    const visitType = req.body.visit_type === undefined ? v.visit_type
+      : Object.keys(VISIT_TYPES).includes(String(req.body.visit_type)) ? String(req.body.visit_type) : null;
     const sendInvites = req.body.send_invites === "1";
     let status = v.status;
     let doneOn = v.done_on;
@@ -244,10 +261,15 @@ ${sections}`, "visits");
         setFlash(req, "Pick the first day of the visit to book it.");
         return res.redirect(`/visits/${v.id}`);
       }
+      // Steuart, 18 Nov 2026: booking confirms what the visit is for.
+      if (!visitType) {
+        return page(req, res, `Visit: ${v.client_name}`, await visitPage({ ...v, assessor_id: assessorId, booked_on: bookedOn, booked_time: time, notes, visit_type: null },
+          ["Choose what this visit is for (General H&S, Fire, Food, Compliance or Other) in \"This visit is for\", then press Book."], sendInvites), "visits");
+      }
       if (req.body.confirm !== "1") {
         const warnings = await bookingWarnings(v, assessorId, bookedOn);
         if (warnings.length) {
-          return page(req, res, `Visit: ${v.client_name}`, await visitPage({ ...v, assessor_id: assessorId, booked_on: bookedOn, booked_time: time, notes }, warnings, sendInvites), "visits");
+          return page(req, res, `Visit: ${v.client_name}`, await visitPage({ ...v, assessor_id: assessorId, booked_on: bookedOn, booked_time: time, notes, visit_type: visitType }, warnings, sendInvites), "visits");
         }
       }
       status = "booked";
@@ -272,8 +294,8 @@ ${sections}`, "visits");
       inviteNote = " " + inviteMessage(await sendVisitInvites(v.id, "cancel"), true);
     }
     await query(
-      `update visits set assessor_id = $2, status = $3, booked_on = $4, booked_time = $5, notes = $6, done_on = $7, updated_at = now() where id = $1`,
-      [v.id, assessorId, status, newBooked, newTime, notes, status === "done" ? doneOn : null],
+      `update visits set assessor_id = $2, status = $3, booked_on = $4, booked_time = $5, notes = $6, done_on = $7, visit_type = $8, updated_at = now() where id = $1`,
+      [v.id, assessorId, status, newBooked, newTime, notes, status === "done" ? doneOn : null, visitType],
     );
     if (action === "book") {
       const changed = v.status !== "booked" || v.booked_on !== bookedOn || (v.booked_time ?? null) !== time || v.assessor_id !== assessorId;
@@ -286,6 +308,10 @@ ${sections}`, "visits");
       await query("insert into activities (client_id, user_id, kind, body) values ($1, $2, 'visit', $3)", [v.client_id, req.user!.id, label]);
     }
     setFlash(req, "Visit saved." + inviteNote);
+    if (action === "done" && v.status !== "done") {
+      const next = await nextToBook(v.client_id, v.id, v.year);
+      if (next) return res.redirect(`/visits/${next.id}?next=1`);
+    }
     res.redirect(`/visits/${v.id}`);
   });
 
@@ -362,7 +388,7 @@ function responseChip(answer: string | null, note: string | null): SafeHtml {
   return html`<span class="chip warn">Not answered yet</span>`;
 }
 
-async function visitPage(v: VisitRow, warnings: string[], sendInvites = true): Promise<SafeHtml> {
+async function visitPage(v: VisitRow, warnings: string[], sendInvites = true, afterDone = false): Promise<SafeHtml> {
   const [as, contacts, nearby, suggestions] = await Promise.all([
     assessors(),
     query("select name, job_title, email, phone from contacts where client_id = $1 order by is_primary desc, name", [v.client_id]),
@@ -387,11 +413,13 @@ async function visitPage(v: VisitRow, warnings: string[], sendInvites = true): P
   <h1><a href="/clients/${v.client_id}">${v.client_name}</a></h1>
   <div class="muted">${v.visit_type ? html`<span class="chip">${VISIT_TYPES[v.visit_type]}</span> ` : ""}Visit ${v.seq}, due ${MONTHS[v.month - 1]} ${v.year} · ${v.days} day${v.days > 1 ? "s" : ""} · ${weekdaysText(v.visit_weekdays)}${drive}</div>
 </div><a href="/visits?year=${v.year}&month=${v.month}">Back to planner</a></div>
+${afterDone && v.status === "to_book" ? html`<div class="flash"><strong>Book the next visit before you leave: ${v.visit_type ? VISIT_TYPES[v.visit_type] : "type not set"}, due ${MONTHS[v.month - 1]} ${v.year}, ${v.days} day${v.days > 1 ? "s" : ""}.</strong> Confirm what it's for with the client (change "This visit is for" if needed), agree the first day and arrival time with the client, enter them below and press Book. The calendar invite goes to the client and to the consultant straight away. The free dates further down suit this visit's month.</div>` : ""}
 ${warnings.length ? html`<div class="error"><strong>Check before booking:</strong><ul>${warnings.map((w) => html`<li>${w}</li>`)}</ul></div>` : ""}
 <div class="grid">
 <section class="card">
   <h2>${VISIT_STATUS_LABEL[v.status]}${dates.length ? html`: ${dateRangeText(dates)}` : ""}</h2>
   <form method="post" action="/visits/${v.id}" class="stack">
+    <label>This visit is for <select name="visit_type"><option value="">Not set</option>${Object.entries(VISIT_TYPES).map(([k, label]) => opt(k, label, v.visit_type))}</select></label>
     <label>Assessor <select name="assessor_id"><option value="">Not set</option>${as.filter((a) => a.active || a.id === v.assessor_id).map((a) => opt(a.id, a.name, v.assessor_id))}</select></label>
     <div class="fields">
       <label>First day <input type="date" name="booked_on" value="${v.booked_on ?? ""}"></label>

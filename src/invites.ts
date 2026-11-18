@@ -11,7 +11,7 @@ import { VISIT_TYPES } from "./routes/clients.ts";
 const token = () => randomBytes(24).toString("base64url");
 
 function organizer(): { name: string; email: string } {
-  const raw = process.env.INVITE_ORGANIZER_EMAIL || process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM || "office@example.com";
+  const raw = process.env.INVITE_ORGANIZER_EMAIL || process.env.EMAIL_REPLY_TO || process.env.EMAIL_FROM || process.env.RESEND_FROM_EMAIL || "office@example.com";
   const email = /<([^>]+)>/.exec(raw)?.[1] ?? raw;
   return { name: "ALPS Consultancy", email: email.trim() };
 }

@@ -46,7 +46,7 @@ export function statusChip(status: string): SafeHtml {
   return html`<span class="chip ${cls}">${STATUS_LABEL[status] ?? status}</span>`;
 }
 
-export const VISIT_TYPES: Record<string, string> = { general: "General H&S", fire: "Fire", food: "Food", compliance: "Compliance" };
+export const VISIT_TYPES: Record<string, string> = { general: "General H&S", fire: "Fire", food: "Food", compliance: "Compliance", other: "Other" };
 
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
