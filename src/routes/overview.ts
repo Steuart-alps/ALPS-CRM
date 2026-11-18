@@ -7,6 +7,7 @@ import { requireOwner, setFlash } from "../auth.ts";
 import { visitDates, dateRangeText } from "./visits.ts";
 import { statusChip, monthsText } from "./clients.ts";
 import { completion, progressBar } from "./gaps.ts";
+import { outstandingVisits } from "../reminders.ts";
 
 export function overviewRouter(): Router {
   const r = Router();
@@ -17,7 +18,7 @@ export function overviewRouter(): Router {
     const y = Number(today.slice(0, 4));
     const m = Number(today.slice(5, 7));
     const isOwner = me.role === "owner";
-    const [tasks, docs, checking, quotes, visitCounts, missed, upcoming, chasers, gaps, waiting] = await Promise.all([
+    const [tasks, docs, checking, quotes, visitCounts, missed, upcoming, chasers, gaps, waiting, toTick] = await Promise.all([
       query(`select t.*, c.name as client_name from tasks t left join clients c on c.id = t.client_id
               where t.assigned_to = $1 and t.status = 'open' order by t.due_on nulls last, t.id limit 20`, [me.id]),
       query(`select d.*, c.name as client_name from doc_requests d join clients c on c.id = d.client_id
@@ -37,6 +38,7 @@ export function overviewRouter(): Router {
                 and (v.client_response = 'change' or v.assessor_response = 'change'
                      or ((v.client_response is null or v.assessor_response is null) and v.invited_at < now() - interval '3 days'))
               order by v.booked_on limit 20`, [today]),
+      outstandingVisits(isOwner ? undefined : me.id),
     ]);
     const count = (st: string) => visitCounts.find((v) => v.status === st)?.n ?? 0;
     const due = (d: string | null) => (d ? html` · <span class="${d < today ? "overdue" : ""}">due ${ukDate(d)}</span>` : "");
@@ -63,6 +65,12 @@ export function overviewRouter(): Router {
     <div class="muted small">Waiting for you to check</div><div class="stat">${checking.length + quotes.length}</div>
     <div class="small">${checking.length} document${checking.length === 1 ? "" : "s"} · ${quotes.length} quote${quotes.length === 1 ? "" : "s"}</div></a>` : ""}
 </div>
+${toTick.length ? html`<section class="card" style="margin-top:1rem">
+  <h2 class="overdue">${isOwner ? "Finished visits not ticked off" : "Your visits to tick off"} (${toTick.length})</h2>
+  <p class="small muted">${isOwner ? "Each consultant is emailed about theirs every 3 days until they're ticked." : "These have finished. Tick each one when it's done; you'll get a reminder every 3 days until then."}</p>
+  <ul class="list">${toTick.map((v) => html`<li class="spread"><span><a href="/visits/${v.id}">${v.client_name}</a> · <span class="small">${v.dates}${isOwner ? ` · ${v.assessor_name ?? "no assessor"}` : ""}</span></span>
+    <form method="post" action="/visits/${v.id}/tick"><button class="small">Done</button></form></li>`)}</ul>
+</section>` : ""}
 <div class="grid" style="margin-top:1rem">
   <section class="card"><h2>My tasks</h2>
     <ul class="list">${tasks.map((t) => html`<li><strong>${t.title}</strong>${t.client_name ? html` · <a href="/clients/${t.client_id}">${t.client_name}</a>` : ""}<span class="small">${due(t.due_on)}</span></li>`)}
