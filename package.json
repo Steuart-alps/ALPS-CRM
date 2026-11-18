@@ -1,0 +1,41 @@
+{
+  "name": "alps-crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "dev": "node --watch src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/logic.test.ts",
+    "test:app": "node --test test/app.test.ts"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "connect-pg-simple": "^10.0.0",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "express-session": "^1.19.0",
+    "multer": "^2.5.0",
+    "otpauth": "^9.6.0",
+    "pg": "^8.23.1",
+    "pizzip": "^3.3.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/connect-pg-simple": "^7.0.3",
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "5.9"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}
