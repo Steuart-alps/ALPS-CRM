@@ -44,6 +44,12 @@ Routes use straight-line distances between postcodes, looked up with
 [postcodes.io](https://postcodes.io) (free, UK open data; only the postcode is
 sent). Add each assessor's home postcode in Settings.
 
+Each visit in the planner shows the miles from the previous stop (or from
+home) with a rough drive time, plus free Google Maps and Apple Maps links for
+real times and traffic. Each trip has a "Whole trip in Google Maps" link from
+home and back. The rough time assumes roads a third longer than a straight
+line at about 40 mph.
+
 ## Document templates
 
 The RA and SOP master formats are loaded on first start from `templates/`.
